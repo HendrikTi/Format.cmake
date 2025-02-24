@@ -145,6 +145,10 @@ def main():
   if opts.verbose >= 1:
     ignored_files = set(changed_lines)
   filter_by_extension(changed_lines, opts.extensions.lower().split(','))
+  # The computed diff outputs absolute paths, so we must cd before accessing
+  # those files.
+  cd_to_toplevel()
+  filter_ignored_files(changed_lines, binary=opts.binary)
   if opts.verbose >= 1:
     ignored_files.difference_update(changed_lines)
     if ignored_files:
@@ -158,9 +162,6 @@ def main():
   if not changed_lines:
     print('no modified files to format')
     return
-  # The computed diff outputs absolute paths, so we must cd before accessing
-  # those files.
-  cd_to_toplevel()
   if len(commits) > 1:
     old_tree = commits[1]
     new_tree = run_clang_format_and_save_to_tree(changed_lines,
@@ -386,6 +387,14 @@ def run_clang_format_and_save_to_tree(changed_lines, revision=None,
       yield '%s %s\t%s' % (mode, blob_id, filename)
   return create_tree(index_info_generator(), '--index-info')
 
+def filter_ignored_files(dictionary, binary):
+  """Delete every key in `dictionary` that is ignored by clang-format."""
+  ignored_files = run(binary, '-list-ignored', *dictionary.keys())
+  if not ignored_files:
+    return
+  ignored_files = ignored_files.split('\n')
+  for filename in ignored_files:
+    del dictionary[filename]
 
 def create_tree(input_lines, mode):
   """Create a tree object from the given input.
